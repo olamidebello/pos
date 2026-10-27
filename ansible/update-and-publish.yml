@@ -1,0 +1,28 @@
+---
+- name: Validate separate POS and Apps Store hosts
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Require one target per service on different servers
+      ansible.builtin.assert:
+        that:
+          - groups.get('pos_servers', []) | length == 1
+          - groups.get('appstore_servers', []) | length == 1
+        fail_msg: Fill both host groups in the two-server inventory.
+    - name: Reject an accidentally shared server address
+      ansible.builtin.assert:
+        that:
+          - hostvars[groups['pos_servers'][0]].ansible_host | default(groups['pos_servers'][0]) != hostvars[groups['appstore_servers'][0]].ansible_host | default(groups['appstore_servers'][0])
+          - pos_domain == 'pos.africandroid.com'
+          - store_domain | default('africanappsstore.space') == 'africanappsstore.space'
+        fail_msg: Configure separate SSH hosts and the Global POS / Apps Store domains.
+
+- ansible.builtin.import_playbook: deploy.yml
+  vars:
+    pos_deploy_hosts: pos_servers
+
+- ansible.builtin.import_playbook: ssl.yml
+
+- ansible.builtin.import_playbook: deploy-appstore.yml

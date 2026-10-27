@@ -1,4 +1,4 @@
-name: Validate agreement and deployment foundation
+name: Validate Global POS controls, marketplace and deployment
 on:
   push:
   pull_request:
@@ -16,4 +16,11 @@ jobs:
       - run: python -m unittest discover -s tests -v
       - run: ansible-playbook -i localhost, ansible/deploy.yml --syntax-check
       - run: ansible-playbook ansible/push.yml --syntax-check
+      - run: ansible-playbook -i localhost, ansible/deploy-olamidepanel.yml --syntax-check
+      - run: ansible-playbook -i ansible/inventory.two-server.example.ini ansible/update-and-publish.yml --syntax-check
+      - run: ansible-playbook -i ansible/inventory.two-server.example.ini ansible/configure-gateways.yml --syntax-check
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check web/admin.js && node --check web/marketplace.js && node --check web/shop.js && node --check web/app.js && node --check web/sw.js
       - run: sh -n deploy/bootstrap.sh

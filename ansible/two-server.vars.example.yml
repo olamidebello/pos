@@ -1,0 +1,18 @@
+---
+# Copy outside Git; replace both public IPs and real certificate contact emails.
+pos_domain: pos.africandroid.com
+pos_public_ip: REPLACE_POS_PUBLIC_IP
+pos_ssl_email: REPLACE_WITH_REAL_EMAIL
+pos_git_version: main
+pos_auto_update: true
+pos_update_interval: 5min
+pos_manage_ufw: false
+
+store_domain: africanappsstore.space
+store_public_ip: REPLACE_STORE_PUBLIC_IP
+store_ssl_email: REPLACE_WITH_REAL_EMAIL
+# If AAAA records exist, list this server's actual public IPv6 addresses here.
+pos_ssl_additional_public_ips: []
+store_ssl_additional_public_ips: []
+# Existing hidden Global POS listings stay hidden unless explicitly set true.
+pos_store_publish: false

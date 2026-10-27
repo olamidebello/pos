@@ -1,0 +1,30 @@
+{
+  "domain": "pos.africandroid.com",
+  "name": "Global POS",
+  "developer": "Olamide Olatayo Bello",
+  "category": "Business",
+  "website": "https://pos.africandroid.com/",
+  "install_url": "https://pos.africandroid.com/install.html",
+  "demo_url": "https://pos.africandroid.com/demo.html",
+  "privacy": "https://pos.africandroid.com/privacy.html",
+  "terms_url": "https://pos.africandroid.com/terms.html",
+  "icon_url": "https://africanappsstore.space/static/global-pos-icon.png",
+  "artwork_url": "https://africanappsstore.space/static/global-pos-world.png",
+  "platforms": "Android · iPhone/iPad · Desktop — installable web app (PWA)",
+  "description": "Every store. One platform. Discover registered stores by location or address and browse inventory linked to each store's address. Manage tenants, stores, staff and inventory through Global POS administration.",
+  "features": [
+    "Nearest registered store with optional location permission",
+    "Manual store selection through address search",
+    "Store-specific inventory with automatic address and coordinate tags",
+    "Super admin, tenant and store controls with scoped staff roles",
+    "Isolated super admin demo with sample Lagos and Texas stores",
+    "Android, iPhone/iPad and desktop web installation",
+    "Searchable multi-store marketplace with one-store baskets",
+    "Server-calculated order totals and configured hosted payment gateways",
+    "Scoped, expiring integration API keys with rotation and revocation"
+  ],
+  "limitations": "Pre-launch preview. Internet required. Live payments are disabled by default and require merchant credentials and operator setup. Demo payments are simulated. Camera scanning, exit-verification receipts, automatic refunds and background payment reconciliation are pending. No native APK or app-store release. Operator contact and retention settings remain pending.",
+  "artifact_kind": "global-pos-pwa",
+  "apk_url": null,
+  "download_status": "web_app"
+}

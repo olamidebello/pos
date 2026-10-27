@@ -1,0 +1,20 @@
+[Unit]
+Description=Global POS administration API
+After=network.target
+[Service]
+User=pos-control
+Group=pos-control
+WorkingDirectory=/opt/pos-control
+EnvironmentFile=-/etc/pos-control/gateways.env
+ExecStart=/usr/bin/python3 /opt/pos-control/control.py --db /var/lib/pos-control/control.db
+Restart=on-failure
+StateDirectory=pos-control
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/pos-control
+[Install]
+WantedBy=multi-user.target

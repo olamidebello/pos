@@ -1,0 +1,111 @@
+---
+- name: Validate certificate inputs
+  ansible.builtin.assert:
+    that:
+      - ssl_domain is match('^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
+      - ssl_email is match('^[A-Za-z0-9._+%-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}$')
+      - not ssl_email.endswith('@example.com')
+      - ssl_method in ['webroot', 'nginx']
+      - ansible_service_mgr == 'systemd'
+    fail_msg: Configure a real certificate contact email and an already deployed Nginx site on a systemd server.
+- name: Require an already configured active Nginx site before package changes
+  ansible.builtin.command:
+    argv: [systemctl, is-active, nginx]
+  changed_when: false
+- name: Acquire the deployment guard to avoid concurrent TLS configuration changes
+  ansible.builtin.command:
+    argv: [mkdir, /run/pos-deploy-active]
+  changed_when: true
+- name: Ensure trusted certificates while retaining existing sites
+  block:
+    - name: Install certificate tools and the Nginx plugin
+      ansible.builtin.apt:
+        name: [certbot, python3-certbot-nginx, python3, ca-certificates, openssl, curl, iproute2]
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+    - name: Create private certificate automation state
+      ansible.builtin.file:
+        path: /var/lib/global-pos-ssl
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+    - name: Install the read-only certificate preflight
+      ansible.builtin.copy:
+        src: '{{ playbook_dir }}/../deploy/ssl_preflight.py'
+        dest: /var/lib/global-pos-ssl/preflight.py
+        mode: '0700'
+    - name: Check every DNS record, port owners, dedicated vhost and certificate coverage
+      ansible.builtin.command:
+        argv: "{{ ['python3', '/var/lib/global-pos-ssl/preflight.py', ssl_domain, ssl_public_ip] + (ssl_additional_public_ips | default([]) | map('regex_replace', '^', '--additional-ip=') | list) }}"
+      register: ssl_preflight
+      changed_when: false
+    - name: Save a timestamped backup of the affected existing vhost
+      ansible.builtin.copy:
+        src: '{{ (ssl_preflight.stdout | from_json).vhost }}'
+        dest: '/var/lib/global-pos-ssl/{{ ssl_domain }}-{{ ansible_date_time.epoch }}.conf'
+        remote_src: true
+        mode: '0600'
+        force: false
+    - name: Obtain or renew the POS certificate through its existing ACME webroot
+      ansible.builtin.command:
+        argv: [certbot, certonly, --webroot, --webroot-path, /var/lib/pos-deploy/acme, --non-interactive, --agree-tos, --email, '{{ ssl_email }}', --cert-name, '{{ ssl_domain }}', --domain, '{{ ssl_domain }}', --keep-until-expiring]
+      register: ssl_webroot_result
+      changed_when: "'not yet due for renewal' not in (ssl_webroot_result.stdout + ssl_webroot_result.stderr)"
+      when: ssl_method == 'webroot'
+    - name: Obtain or renew and install the existing Apps Store hostname certificate
+      ansible.builtin.command:
+        argv: [certbot, --nginx, --redirect, --non-interactive, --agree-tos, --email, '{{ ssl_email }}', --cert-name, '{{ ssl_domain }}', --domain, '{{ ssl_domain }}', --keep-until-expiring]
+      register: ssl_nginx_result
+      changed_when: "'not yet due for renewal' not in (ssl_nginx_result.stdout + ssl_nginx_result.stderr)"
+      when: ssl_method == 'nginx'
+    - name: Validate all Nginx configuration before reloading
+      ansible.builtin.command:
+        argv: [nginx, -t]
+      changed_when: false
+    - name: Reload the validated certificate configuration
+      ansible.builtin.systemd:
+        name: nginx
+        state: reloaded
+    - name: Create certificate renewal hook directory
+      ansible.builtin.file:
+        path: /etc/letsencrypt/renewal-hooks/deploy
+        state: directory
+        mode: '0755'
+    - name: Reload Nginx only after successful certificate renewal
+      ansible.builtin.copy:
+        dest: /etc/letsencrypt/renewal-hooks/deploy/global-pos-nginx-reload
+        mode: '0755'
+        content: |
+          #!/bin/sh
+          set -eu
+          /usr/sbin/nginx -t
+          /usr/bin/systemctl reload nginx
+    - name: Enable automatic renewal for installed certificates
+      ansible.builtin.systemd:
+        name: certbot.timer
+        enabled: true
+        state: started
+    - name: Verify origin certificate trust, expiry and hostname with SNI
+      ansible.builtin.command:
+        argv: [curl, --fail, --silent, --show-error, --noproxy, '*', --resolve, '{{ ssl_domain }}:443:127.0.0.1', 'https://{{ ssl_domain }}/']
+      changed_when: false
+    - name: Verify the public HTTPS endpoint
+      ansible.builtin.uri:
+        url: 'https://{{ ssl_domain }}/'
+        validate_certs: true
+        status_code: 200
+        use_proxy: false
+    - name: Verify the domain certificate is not about to expire
+      ansible.builtin.command:
+        argv: [openssl, x509, -checkend, '604800', -noout, -in, '/etc/letsencrypt/live/{{ ssl_domain }}/fullchain.pem']
+      changed_when: false
+    - name: Report verified certificate and renewal
+      ansible.builtin.debug:
+        msg: 'Verified trusted HTTPS for {{ ssl_domain }}; certbot.timer renews automatically. TCP 80 must remain reachable for HTTP-01 renewal.'
+  always:
+    - name: Release the certificate deployment guard
+      ansible.builtin.file:
+        path: /run/pos-deploy-active
+        state: absent

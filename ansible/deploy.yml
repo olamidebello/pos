@@ -1,6 +1,7 @@
 ---
-- name: Pull and deploy the POS foundation with verified HTTPS
-  hosts: all
+- name: Pull and deploy Global POS with verified HTTPS
+  hosts: "{{ pos_deploy_hosts | default('all') }}"
+  any_errors_fatal: true
   become: true
   gather_facts: true
   vars:
@@ -36,7 +37,7 @@
       block:
         - name: Install deployment prerequisites
           ansible.builtin.apt:
-            name: [git, python3, iproute2, ca-certificates, openssl, curl, util-linux]
+            name: [git, python3, tzdata, iproute2, ca-certificates, openssl, curl, util-linux]
             state: present
             update_cache: true
             cache_valid_time: 3600
@@ -99,6 +100,59 @@
             argv: [python3, -m, unittest, discover, -s, tests, -v]
             chdir: /var/lib/pos-deploy/source
           changed_when: false
+        - name: Create dedicated administration service account
+          ansible.builtin.user:
+            name: pos-control
+            system: true
+            create_home: false
+            shell: /usr/sbin/nologin
+        - name: Create administration runtime directory
+          ansible.builtin.file:
+            path: /opt/pos-control
+            state: directory
+            owner: root
+            group: root
+            mode: '0755'
+        - name: Install tested administration backend
+          ansible.builtin.copy:
+            src: "/var/lib/pos-deploy/source/{{ item }}"
+            dest: "/opt/pos-control/{{ item }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: '0644'
+          loop: [control.py, commerce.py, gateways.py, agreement_gate.py]
+          register: pos_control_code
+        - name: Install server-readable immutable agreement documents
+          ansible.builtin.copy:
+            src: /var/lib/pos-deploy/source/agreements/
+            dest: /opt/pos-control/agreements/
+            remote_src: true
+            owner: root
+            group: root
+            mode: '0644'
+            directory_mode: '0755'
+        - name: Install isolated administration service
+          ansible.builtin.template:
+            src: control.service.j2
+            dest: /etc/systemd/system/pos-control.service
+            mode: '0644'
+          register: pos_control_unit
+        - name: Start administration service on loopback only
+          ansible.builtin.systemd:
+            name: pos-control
+            daemon_reload: true
+            enabled: true
+            state: "{{ 'restarted' if pos_control_code.changed or pos_control_unit.changed else 'started' }}"
+        - name: Verify administration API readiness
+          ansible.builtin.uri:
+            url: http://127.0.0.1:8787/api/stores
+            status_code: 200
+            use_proxy: false
+          register: pos_control_health
+          retries: 5
+          delay: 1
+          until: pos_control_health.status == 200
         - name: Identify immutable release directory
           ansible.builtin.set_fact:
             pos_release: "/var/www/pos/releases/{{ pos_source.after }}"
@@ -131,7 +185,7 @@
         - name: Write truthful release health metadata
           ansible.builtin.copy:
             dest: "{{ pos_release }}/healthz.json"
-            content: "{{ {'status': 'ok', 'component': 'agreement-foundation', 'shopping_available': false, 'commit': pos_source.after} | to_nice_json }}\n"
+            content: "{{ {'status': 'ok', 'component': 'global-pos-control', 'shopping_available': false, 'commit': pos_source.after} | to_nice_json }}\n"
             mode: '0644'
         - name: Inspect previous deployment pointer
           ansible.builtin.stat:
@@ -394,10 +448,10 @@
           ansible.builtin.copy:
             dest: /var/lib/pos-deploy/report.json
             mode: '0600'
-            content: "{{ {'status': 'deployed', 'url': 'https://' + pos_domain, 'commit': pos_source.after, 'component': 'agreement-foundation', 'shopping_available': false, 'ssl': 'verified', 'auto_update': pos_auto_update | bool} | to_nice_json }}\n"
+            content: "{{ {'status': 'deployed', 'url': 'https://' + pos_domain, 'commit': pos_source.after, 'component': 'global-pos-control', 'shopping_available': false, 'ssl': 'verified', 'auto_update': pos_auto_update | bool} | to_nice_json }}\n"
         - name: Report the verified result
           ansible.builtin.debug:
-            msg: "Deployed agreement foundation at https://{{ pos_domain }} with verified SSL. Shopping/payment functionality is not implemented."
+            msg: "Deployed Global POS administration at https://{{ pos_domain }} with verified SSL. Shopping/payment functionality is not implemented."
       always:
         - name: Release deployment guard
           ansible.builtin.file:

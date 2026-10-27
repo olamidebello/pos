@@ -1,0 +1,10 @@
+class ExistingStore:
+    def route(self, path):
+        if self.command in ('GET','HEAD') and path in ('/downloads/existing.apk','/downloads/existing.png'):
+            kind='application/vnd.android.package-archive' if path.endswith('.apk') else 'image/png' if path.endswith('.png') else 'text/plain'
+            return
+        if self.command in ('GET','HEAD') and path in ('/','/copyright','/terms','/privacy','/static/app.js','/static/style.css','/static/logo.jpg','/static/africa-media-icon.svg','/static/vitabridge-icon.svg'):
+            file=ROOT/({'/':'templates/index.html','/copyright':'templates/copyright.html','/terms':'templates/terms.html','/privacy':'templates/privacy.html'}.get(path,path.lstrip('/'))); raw=file.read_bytes(); self.send_response(200); self.headers_out('text/html' if path in ('/','/copyright','/terms','/privacy') else 'text/javascript' if path.endswith('.js') else 'image/svg+xml' if path.endswith('.svg') else 'image/jpeg' if path.endswith('.jpg') else 'text/css',len(raw)); self.end_headers();
+            if self.command!='HEAD': self.wfile.write(raw)
+            return
+

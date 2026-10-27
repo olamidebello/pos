@@ -1,0 +1,89 @@
+---
+- name: Require the separate Apps Store inventory group
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Require an explicit Apps Store SSH target
+      ansible.builtin.assert:
+        that: groups.get('appstore_servers', []) | length == 1
+        fail_msg: Configure one real Apps Store host in the appstore_servers inventory group.
+
+- name: Add or update only Global POS on the separate Apps Store server
+  hosts: appstore_servers
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  vars:
+    pos_store_tools: /opt/global-pos-store-tools
+    pos_store_publish: false
+  tasks:
+    - name: Confirm the existing store service is active on this host
+      ansible.builtin.command:
+        argv: [systemctl, is-active, africanappsstore.service]
+      register: pos_store_active
+      changed_when: false
+      failed_when: pos_store_active.rc != 0 or pos_store_active.stdout | trim != 'active'
+    - name: Verify Global POS install and demo resources are live before advertising them
+      ansible.builtin.uri:
+        url: 'https://pos.africandroid.com{{ item }}'
+        validate_certs: true
+        status_code: 200
+        use_proxy: false
+      loop: [/install.html, /demo.html, /privacy.html, /terms.html, /assets/icon-192.png, /sw.js]
+    - name: Verify the mobile manifest identifies Global POS
+      ansible.builtin.uri:
+        url: https://pos.africandroid.com/manifest.webmanifest
+        validate_certs: true
+        status_code: 200
+        return_content: true
+        use_proxy: false
+      register: pos_store_manifest
+      failed_when: pos_store_manifest.status != 200 or (pos_store_manifest.content | from_json).name != 'Global POS'
+    - name: Create private listing update tool directory
+      ansible.builtin.file:
+        path: '{{ pos_store_tools }}'
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+    - name: Copy the targeted updater and truthful PWA catalog entry
+      ansible.builtin.copy:
+        src: '{{ item.src }}'
+        dest: '{{ pos_store_tools }}/{{ item.dest }}'
+        owner: root
+        group: root
+        mode: '0600'
+      loop:
+        - {src: ../deploy/install_global_pos_store.py, dest: install_global_pos_store.py}
+        - {src: ../catalog/global-pos.json, dest: global-pos.json}
+    - name: Discover running store paths including effective EnvironmentFile settings
+      ansible.builtin.command:
+        argv: [python3, '{{ pos_store_tools }}/install_global_pos_store.py', --inspect]
+      register: pos_store_inspect
+      changed_when: false
+    - name: Record the detected store paths without copying service secrets
+      ansible.builtin.set_fact:
+        pos_store_layout: '{{ pos_store_inspect.stdout | from_json }}'
+    - name: Install same-origin public branding assets for the store security policy
+      ansible.builtin.copy:
+        src: '{{ item.src }}'
+        dest: '{{ pos_store_layout.code }}/static/{{ item.dest }}'
+        owner: root
+        group: root
+        mode: '0644'
+        backup: true
+      loop:
+        - {src: ../web/assets/icon-192.png, dest: global-pos-icon.png}
+        - {src: ../web/assets/global-pos-world.png, dest: global-pos-world.png}
+    - name: Back up and upsert only Global POS then verify local and public catalogs
+      ansible.builtin.command:
+        argv: "{{ ['python3', pos_store_tools + '/install_global_pos_store.py', '--discover', '--manifest', pos_store_tools + '/global-pos.json', '--verify-public'] + (['--publish'] if pos_store_publish | bool else []) }}"
+      register: pos_store_result
+      changed_when: (pos_store_result.stdout | from_json).changed | bool
+    - name: Report the listing result and administrator visibility state
+      ansible.builtin.debug:
+        msg: >-
+          {{ pos_store_result.stdout }}.
+          Store: https://africanappsstore.space/#Hosted%20apps .
+          Existing visibility is preserved unless pos_store_publish=true.

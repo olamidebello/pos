@@ -1,0 +1,52 @@
+---
+- name: Prepare Global POS deployment on the existing Olamidepanel server
+  hosts: "{{ pos_deploy_hosts | default('all') }}"
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Require the existing Olamidepanel installation
+      ansible.builtin.command:
+        argv: [systemctl, show, olamidepanel.service, --property=LoadState, --value]
+      register: pos_panel_service
+      changed_when: false
+      failed_when: pos_panel_service.rc != 0 or pos_panel_service.stdout | trim != 'loaded'
+    - name: Locate existing private panel deployment settings
+      ansible.builtin.stat:
+        path: '{{ item }}'
+      loop: [/etc/olamidepanel/provisioning.json, /etc/olamide-github-deploy.json]
+      register: pos_panel_settings_files
+    - name: Read existing settings without logging private configuration
+      ansible.builtin.slurp:
+        src: '{{ item.item }}'
+      loop: '{{ pos_panel_settings_files.results }}'
+      when: item.stat.isreg | default(false)
+      register: pos_panel_settings_raw
+      no_log: true
+    - name: Extract only public IP and certificate contact defaults
+      ansible.builtin.set_fact:
+        pos_panel_defaults: >-
+          {{ pos_panel_defaults | default({}) | combine({
+          'public_ip': pos_panel_defaults.public_ip | default((item.content | b64decode | from_json).public_ipv4 | default((item.content | b64decode | from_json).server_ipv4 | default('')), true),
+          'email': pos_panel_defaults.email | default((item.content | b64decode | from_json).acme_email | default((item.content | b64decode | from_json).admin_email | default('')), true)
+          }) }}
+      loop: '{{ pos_panel_settings_raw.results }}'
+      when: item.content is defined
+      no_log: true
+    - name: Select the Global POS domain and supplied or detected server settings
+      ansible.builtin.set_fact:
+        pos_domain: "{{ pos_domain | default('pos.africandroid.com') }}"
+        pos_public_ip: "{{ pos_public_ip | default((pos_panel_defaults | default({})).public_ip | default('')) }}"
+        pos_ssl_email: "{{ pos_ssl_email | default((pos_panel_defaults | default({})).email | default('')) }}"
+    - name: Require the Global POS hostname and actual deployment values
+      ansible.builtin.assert:
+        that:
+          - pos_domain == 'pos.africandroid.com'
+          - pos_public_ip | length > 0
+          - pos_ssl_email | length > 0
+        fail_msg: Supply pos_public_ip and pos_ssl_email in private settings if the existing panel configuration does not provide them. The domain must be pos.africandroid.com.
+    - name: Explain the separate application deployment
+      ansible.builtin.debug:
+        msg: Deploying Global POS as a dedicated backend and Nginx hostname on the Olamidepanel server. The panel application, database and other websites are preserved; exact hostname conflicts fail before replacement.
+
+- ansible.builtin.import_playbook: deploy.yml

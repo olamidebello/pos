@@ -1,0 +1,58 @@
+---
+- name: Install private provider secrets only on Global POS servers
+  hosts: pos_servers
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  vars:
+    pos_enable_live_payments: false
+  tasks:
+    - name: Require a mapping of provider secret references
+      ansible.builtin.assert:
+        that:
+          - pos_gateway_secrets is defined
+          - pos_gateway_secrets | type_debug == 'dict'
+          - pos_gateway_secrets | length > 0
+        fail_msg: Supply the complete provider-secret mapping from a private Ansible Vault file.
+      no_log: true
+    - name: Validate environment names and single-line provider key values
+      ansible.builtin.assert:
+        that:
+          - item.key is match('^GLOBALPOS_(STRIPE|PAYSTACK|FLUTTERWAVE)_(TEST|LIVE)_[A-Z0-9_]{1,80}$')
+          - item.value is string
+          - item.value is match('^[A-Za-z0-9._-]{10,512}$')
+        fail_msg: Use provider-specific environment references and provider-issued key values.
+      loop: '{{ pos_gateway_secrets | dict2items }}'
+      no_log: true
+    - name: Confirm the POS backend is already installed and active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, pos-control.service]
+      changed_when: false
+    - name: Create a private provider configuration directory
+      ansible.builtin.file:
+        path: /etc/pos-control
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+    - name: Write the declared provider secrets and explicit live-payment gate
+      ansible.builtin.copy:
+        dest: /etc/pos-control/gateways.env
+        owner: root
+        group: root
+        mode: '0600'
+        content: |
+          # Managed by Global POS configure-gateways.yml; supply the full mapping on each run.
+          GLOBALPOS_PUBLIC_URL=https://pos.africandroid.com
+          GLOBALPOS_ENABLE_LIVE_PAYMENTS={{ '1' if pos_enable_live_payments | bool else '0' }}
+          {% for item in pos_gateway_secrets | dict2items | sort(attribute='key') %}
+          {{ item.key }}={{ item.value | to_json }}
+          {% endfor %}
+      no_log: true
+      diff: false
+      register: pos_gateway_environment
+    - name: Restart the backend to load changed secrets without exposing them
+      ansible.builtin.systemd:
+        name: pos-control.service
+        state: restarted
+      when: pos_gateway_environment.changed

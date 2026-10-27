@@ -9,3 +9,10 @@ ansible/vault.yml
 *.retry
 *.key
 *.pem
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+gateways.env
+ansible/inventory.two-server.ini
+ansible/two-server.vars.yml
+ansible/gateways.vault.yml

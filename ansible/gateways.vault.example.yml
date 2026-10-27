@@ -1,0 +1,8 @@
+---
+# Copy OUTSIDE Git and encrypt it with ansible-vault before adding real keys.
+# This is the complete managed mapping; omitted references are removed on update.
+pos_enable_live_payments: false
+pos_gateway_secrets:
+  GLOBALPOS_STRIPE_TEST_LAGOS: REPLACE_WITH_PROVIDER_TEST_KEY
+  GLOBALPOS_PAYSTACK_TEST_LAGOS: REPLACE_WITH_PROVIDER_TEST_KEY
+  GLOBALPOS_FLUTTERWAVE_TEST_LAGOS: REPLACE_WITH_PROVIDER_TEST_KEY
