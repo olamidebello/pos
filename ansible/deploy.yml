@@ -136,8 +136,17 @@
             remote_src: true
             owner: root
             group: root
-            mode: '0644'
+            mode: preserve
             directory_mode: '0755'
+        - name: Keep agreement directories traversable by the backend service
+          ansible.builtin.file:
+            path: /opt/pos-control/agreements
+            state: directory
+            recurse: true
+            follow: false
+            owner: root
+            group: root
+            mode: 'u=rwX,go=rX'
         - name: Install isolated administration service
           ansible.builtin.template:
             src: control.service.j2
@@ -177,7 +186,7 @@
             remote_src: true
             owner: root
             group: root
-            mode: '0644'
+            mode: preserve
             directory_mode: '0755'
         - name: Copy agreement documents, excluding source and private state
           ansible.builtin.copy:
@@ -193,6 +202,26 @@
             dest: "{{ pos_release }}/healthz.json"
             content: "{{ {'status': 'ok', 'component': 'global-pos-control', 'shopping_available': false, 'commit': pos_source.after} | to_nice_json }}\n"
             mode: '0644'
+        - name: Normalize traversal and read permissions only within the public release
+          ansible.builtin.file:
+            path: '{{ pos_release }}'
+            state: directory
+            recurse: true
+            follow: false
+            owner: root
+            group: root
+            mode: 'u=rwX,go=rX'
+        - name: Install the Nginx worker access checker outside the public release
+          ansible.builtin.copy:
+            src: ../deploy/check_public_access.py
+            dest: /var/lib/pos-deploy/check_public_access.py
+            owner: root
+            group: root
+            mode: '0700'
+        - name: Confirm Nginx can read the release before changing live routing
+          ansible.builtin.command:
+            argv: [python3, /var/lib/pos-deploy/check_public_access.py, '{{ pos_release }}']
+          changed_when: false
         - name: Inspect previous deployment pointer
           ansible.builtin.stat:
             path: /var/www/pos/current
