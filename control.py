@@ -73,6 +73,24 @@ class Control:
                 raise ValueError('Super admin already exists; use authenticated user management')
             self.db.execute('INSERT INTO users VALUES(?,?,?,1,1)', (secrets.token_hex(12), email.lower().strip(), self.password(password)))
 
+    def signup(self, data):
+        email=self.required(data,'email').lower()
+        if len(email)>254 or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+",email):
+            raise ValueError('Enter a valid email address')
+        if data.get('accept_terms') is not True:
+            raise ValueError('Accept the terms and privacy policy to continue')
+        password=self.password(data.get('password'))
+        business=self.required(data,'business_name')
+        user,tenant=secrets.token_hex(12),secrets.token_hex(12)
+        with self.db:
+            if self.db.execute('SELECT 1 FROM users WHERE email=?',(email,)).fetchone():
+                raise ValueError('Unable to create account with this email; sign in or contact your administrator')
+            self.db.execute('INSERT INTO users VALUES(?,?,?,0,1)',(user,email,password))
+            self.db.execute('INSERT INTO tenants VALUES(?,?,?)',(tenant,business,'active'))
+            self.db.execute('INSERT INTO memberships VALUES(?,?,?,?)',(user,tenant,'','tenant_admin'))
+            self.log({'id':user},'account.signup',tenant,{'terms':'terms-v2','privacy':'privacy-v2'})
+        return {'ok':True,'message':'Account created. Sign in to add your stores.'}
+
     def login(self, email, password):
         email = email.lower().strip()
         limit = self.db.execute('SELECT * FROM login_limits WHERE email=?', (email,)).fetchone()
@@ -367,6 +385,10 @@ class Handler(BaseHTTPRequestHandler):
                 result=control.discover(query.get('lat',[None])[0],query.get('lon',[None])[0])
             elif self.command=='GET' and path=='/api/catalog':
                 result=control.public_catalog(query.get('store_id',[''])[0])
+            elif self.command=='POST' and path=='/api/signup':
+                if control.demo: raise PermissionError('Use the live signup page to create an account')
+                control.rate_limit('signup:'+origin,5,3600)
+                result=control.signup(self.body())
             elif self.command=='POST' and path=='/api/login':
                 data=self.body(); result={'token':control.login(data.get('email',''),data.get('password',''))}
             else:

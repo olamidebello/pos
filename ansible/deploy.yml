@@ -493,7 +493,7 @@
             content: "{{ {'status': 'deployed', 'url': 'https://' + pos_domain, 'commit': pos_source.after, 'component': 'global-pos-control', 'shopping_available': false, 'ssl': 'verified', 'auto_update': pos_auto_update | bool} | to_nice_json }}\n"
         - name: Report the verified result
           ansible.builtin.debug:
-            msg: "Deployed Global POS administration at https://{{ pos_domain }} with verified SSL. Shopping/payment functionality is not implemented."
+            msg: "Deployed Global POS administration at https://{{ pos_domain }} with verified SSL. Marketplace and hosted payments require enabled features and merchant gateway configuration."
       always:
         - name: Release deployment guard
           ansible.builtin.file:

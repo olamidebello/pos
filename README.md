@@ -116,3 +116,9 @@ node --check web/marketplace.js
 Tests cover tenant isolation, account/session controls, demo separation, scoped-key lifecycle, payment verification with mocked provider responses, idempotent/atomic stock holds, catalog preservation/rollback and SSL preflight. Production SSH, DNS/ACME issuance, real merchant accounts, native-device installation and browser rendering require validation in the target environment. This environment has no installed Playwright browser executable.
 
 Remaining work includes MFA/recovery, shopper accounts, camera/OCR scanning, signed payment webhooks, abandoned-order reconciliation/hold lifecycle, tax and refunds, settlement accounting, inventory movement ledgers, merchant onboarding, exit receipts, real translations, monitoring, backups/restore drills, production load tests and regional scaling. SQLite is suitable for this implementation's current deployment size, not an assertion of global-scale throughput. Back up its live database with SQLite's online backup API. Static routing rollback does not roll back backend data or code; schema initialization is additive and future changes require explicit migrations.
+
+### Business signup
+
+`/signup.html` creates a business account with a new isolated tenant and tenant_admin membership. It never grants global super admin rights or joins an existing tenant. Signup requires terms/privacy acknowledgement and a password of at least 12 characters; requests are limited to five per IP per hour. Sign in at `/admin.html` after signup. Email ownership is not verified; signup alone does not authorize a merchant for live payments.
+
+There is no default production super admin password. On the server, run `runuser -u pos-control -- python3 /opt/pos-control/control.py --db /var/lib/pos-control/control.db --bootstrap YOUR_EMAIL` and enter a private password at the prompt. Bootstrap refuses to overwrite an existing super admin. Public demo credentials work only in the isolated demo.
