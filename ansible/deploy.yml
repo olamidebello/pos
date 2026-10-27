@@ -58,8 +58,14 @@
             mode: '0700'
         - name: Check DNS, port owners, duplicate hostnames and existing Nginx syntax
           ansible.builtin.command:
-            argv: [python3, /var/lib/pos-deploy/preflight.py, "{{ pos_domain }}", "{{ pos_public_ip }}", "{{ pos_vhost }}"]
+            argv: "{{ ['python3', '/var/lib/pos-deploy/preflight.py', pos_domain, pos_public_ip, pos_vhost] + (pos_ssl_additional_public_ips | default([]) | map('regex_replace', '^', '--additional-ip=') | list) }}"
           changed_when: false
+          register: pos_routing_preflight
+        - name: Match existing Nginx IP listener groups for the POS hostname
+          ansible.builtin.set_fact:
+            pos_http_listeners: '{{ (pos_routing_preflight.stdout | from_json).http_listeners }}'
+            pos_https_listeners: '{{ (pos_routing_preflight.stdout | from_json).https_listeners }}'
+            pos_acme_probe_addresses: '{{ (pos_routing_preflight.stdout | from_json).probe_addresses }}'
         - name: Install Nginx, certificate client and the automatic pull runner
           ansible.builtin.apt:
             name: [nginx, certbot, ansible-core]
@@ -285,6 +291,13 @@
                 dest: /var/lib/pos-deploy/acme/.well-known/acme-challenge/pos-route-check
                 content: "{{ pos_source.after }}"
                 mode: '0644'
+            - name: Verify ACME locally across the configured IP listener groups
+              ansible.builtin.command:
+                argv: [curl, --fail, --silent, --show-error, --noproxy, '*', --resolve, '{{ pos_domain }}:80:{{ item }}', 'http://{{ pos_domain }}/.well-known/acme-challenge/pos-route-check']
+              loop: '{{ pos_acme_probe_addresses }}'
+              register: pos_local_acme_probe
+              changed_when: false
+              failed_when: pos_local_acme_probe.rc != 0 or pos_local_acme_probe.stdout != pos_source.after
             - name: Verify public DNS reaches this exact ACME webroot
               ansible.builtin.uri:
                 url: "http://{{ pos_domain }}/.well-known/acme-challenge/pos-route-check"
@@ -401,7 +414,7 @@
               when: pos_nginx_was_active.rc != 0
             - name: Report activation failure after restoring routing
               ansible.builtin.fail:
-                msg: "Deployment failed and previous routing was restored. Inspect the failed task above, DNS A/AAAA records and external firewall/NAT rules for TCP 80/443. No conflicting services were killed."
+                msg: "Deployment failed and previous routing was restored. If a local ACME probe failed, inspect the reported listener address, Nginx routing and webroot permissions. If local probes passed but the public probe failed, check DNS A/AAAA records, proxy/CDN challenge handling and NAT to this server. No conflicting services were killed."
         - name: Ensure the certificate deploy-hook directory exists
           ansible.builtin.file:
             path: /etc/letsencrypt/renewal-hooks/deploy
@@ -429,7 +442,7 @@
             owner: root
             group: root
             mode: '0600'
-            content: "{{ {'pos_domain': pos_domain, 'pos_public_ip': pos_public_ip, 'pos_ssl_email': pos_ssl_email, 'pos_repo_url': pos_repo_url, 'pos_git_version': pos_git_version, 'pos_auto_update': pos_auto_update | bool, 'pos_update_interval': pos_update_interval, 'pos_manage_ufw': pos_manage_ufw | bool} | to_nice_yaml }}"
+            content: "{{ {'pos_domain': pos_domain, 'pos_public_ip': pos_public_ip, 'pos_ssl_additional_public_ips': pos_ssl_additional_public_ips | default([]), 'pos_ssl_email': pos_ssl_email, 'pos_repo_url': pos_repo_url, 'pos_git_version': pos_git_version, 'pos_auto_update': pos_auto_update | bool, 'pos_update_interval': pos_update_interval, 'pos_manage_ufw': pos_manage_ufw | bool} | to_nice_yaml }}"
         - name: Install the automatic update service and timer
           ansible.builtin.template:
             src: "{{ item.src }}"

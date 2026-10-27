@@ -82,3 +82,23 @@ class PushSafetyTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class ExistingIPListenersTest(unittest.TestCase):
+    def test_address_specific_groups_are_preserved_without_default_flags(self):
+        from deploy.preflight import web_listeners
+        config='''server { listen 154.16.170.86:80 default_server; }
+server { listen 80; listen [::]:80; }
+server { listen 154.16.170.86:443 ssl http2; listen 127.0.0.1:8080; }'''
+        self.assertEqual(web_listeners(config,80),['154.16.170.86:80','80','[::]:80'])
+        self.assertEqual(web_listeners(config,443),['154.16.170.86:443','443'])
+    def test_nonstandard_protocol_is_not_silently_reconfigured(self):
+        from deploy.preflight import web_listeners
+        for endpoint in ('154.16.170.86:80','80'):
+            with self.assertRaises(ValueError):web_listeners('listen '+endpoint+' proxy_protocol;',80)
+    def test_template_joins_ip_socket_groups_for_http_and_tls(self):
+        folder=pathlib.Path(__file__).resolve().parents[1]/'ansible/templates'
+        env=Environment(loader=FileSystemLoader(str(folder)),undefined=StrictUndefined)
+        output=env.get_template('nginx.conf.j2').render(pos_domain='pos.africandroid.world',pos_tls_ready=True,pos_http_listeners=['80','154.16.170.86:80'],pos_https_listeners=['443','154.16.170.86:443'])
+        self.assertIn('listen 154.16.170.86:80;',output)
+        self.assertIn('listen 154.16.170.86:443 ssl;',output)
+        self.assertNotIn('default_server',output)

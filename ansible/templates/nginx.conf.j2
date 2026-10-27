@@ -1,9 +1,8 @@
 # Managed by the POS Ansible deployment. Other vhosts remain unchanged.
 server {
-    listen 80;
-{% if ansible_all_ipv6_addresses | default([]) | length > 0 %}
-    listen [::]:80;
-{% endif %}
+{% for endpoint in pos_http_listeners | default(['80'] + (['[::]:80'] if ansible_all_ipv6_addresses | default([]) | length > 0 else [])) %}
+    listen {{ endpoint }};
+{% endfor %}
     server_name {{ pos_domain }};
     location ^~ /.well-known/acme-challenge/ {
         root /var/lib/pos-deploy/acme;
@@ -20,10 +19,9 @@ server {
 }
 {% if pos_tls_ready %}
 server {
-    listen 443 ssl;
-{% if ansible_all_ipv6_addresses | default([]) | length > 0 %}
-    listen [::]:443 ssl;
-{% endif %}
+{% for endpoint in pos_https_listeners | default(['443'] + (['[::]:443'] if ansible_all_ipv6_addresses | default([]) | length > 0 else [])) %}
+    listen {{ endpoint }} ssl;
+{% endfor %}
     server_name {{ pos_domain }};
     ssl_certificate /etc/letsencrypt/live/{{ pos_domain }}/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/{{ pos_domain }}/privkey.pem;

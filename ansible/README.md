@@ -232,3 +232,9 @@ journalctl -u pos-auto-update.service -n 100 --no-pager
 ```
 
 Then bootstrap the first real admin using the hidden-password command in the main README. Public demo accounts already work in their isolated sessions; no production password is created or reset by deployment.
+
+### ACME 404 on an Olamidepanel host
+
+A successful backend readiness check followed by an HTTP-01 probe 404 means deployment has reached Nginx routing, but the public challenge URL did not serve this deployment's token. The deployment now detects existing literal IP-specific HTTP/HTTPS listeners and joins those socket address groups for **only** the Global POS hostname. It does not change other hosts, wildcard names or default-site ownership. This handles Nginx's IP/port selection occurring before hostname selection.
+
+Before requesting a certificate it checks the exact token across local listener addresses, then through public DNS. All published A/AAAA records must point to this machine's actual interfaces, its declared public IP, or explicitly supplied additional public addresses. If local checks pass but the public check fails, inspect DNS, CDN/proxy challenge forwarding and NAT. If local checks fail, the error identifies the failing address; inspect its Nginx route and webroot access. Existing deployment rollback remains in place. No certificate request is made until both checks pass.
