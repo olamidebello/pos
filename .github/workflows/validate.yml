@@ -23,4 +23,6 @@ jobs:
         with:
           node-version: '22'
       - run: node --check web/admin.js && node --check web/marketplace.js && node --check web/shop.js && node --check web/app.js && node --check web/sw.js
+      - run: node --check web/product-search.js && node --check web/signup.js
+      - run: ansible-playbook -i localhost, discover-store.yml --syntax-check
       - run: sh -n deploy/bootstrap.sh

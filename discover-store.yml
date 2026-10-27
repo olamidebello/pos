@@ -10,6 +10,6 @@
           - /usr/bin/python3
           - "{{ playbook_dir }}/discovery.py"
           - "{{ discovery_output }}"
-        stdin: "{{ {'lat': discovery_lat, 'lon': discovery_lon} | to_json }}"
+          - "{{ discovery_input }}"
       changed_when: false
       no_log: true

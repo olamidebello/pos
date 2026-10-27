@@ -17,6 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from zoneinfo import ZoneInfo
 from discovery import discover
+from product_search import search as search_products
 from commerce import Commerce, initialize as initialize_commerce, RESOURCES as COMMERCE_RESOURCES
 
 DEMO_EMAIL = 'demo@globalpos.example'
@@ -386,6 +387,15 @@ class Handler(BaseHTTPRequestHandler):
                 result=control.discover(query.get('lat',[None])[0],query.get('lon',[None])[0])
             elif self.command=='GET' and path=='/api/catalog':
                 result=control.public_catalog(query.get('store_id',[''])[0])
+            elif self.command=='POST' and path=='/api/product-search':
+                control.rate_limit('product-search:'+origin,12,3600)
+                data=self.body()
+                result=search_products(data,self.server.db_path if not control.demo else str(control.db.execute('PRAGMA database_list').fetchone()[2]))
+                result['findings']=[]
+                if not control.demo and data.get('online') is True:
+                    control.rate_limit('discovery:global',120,3600)
+                    try:result.update(discover({'lat':data['lat'],'lon':data['lon'],'query':data['query']},self.server.db_path))
+                    except ValueError as error:result['online_error']=str(error)
             elif self.command=='POST' and path=='/api/discovery':
                 if control.demo: raise PermissionError('Online discovery is unavailable in the demo')
                 control.rate_limit('discovery:'+origin,6,3600)

@@ -38,6 +38,10 @@ class HTTPTests(unittest.TestCase):
                 self.assertEqual(len(call(prefix+'/stores')),2)
                 market=call(prefix+'/marketplace')
                 store=market['stores'][0]
+                found=call(prefix+'/product-search',dict(query=store['products'][0]['name'],lat=store['lat'],lon=store['lon'],online=True))
+                self.assertTrue(any(row['id']==store['id'] for row in found['stores']))
+                self.assertEqual(found['findings'],[])
+                self.assertEqual(call('/api/product-search',dict(query=store['products'][0]['name'],lat=store['lat'],lon=store['lon'],online=False))['stores'],[])
                 issued=call(prefix+'/admin/api_keys',dict(store_id=store['id'],name='HTTP test key',scopes='inventory:read'),demo['token'])
                 inventory=call(prefix+'/integration/inventory?store_id='+store['id'],key=issued['secret'])
                 self.assertEqual(len(inventory),2)

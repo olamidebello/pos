@@ -24,10 +24,14 @@ class WebIntegrityTests(unittest.TestCase):
                 target=ROOT/relative if route.startswith('/agreements/') else ROOT/'web'/relative
                 self.assertTrue(target.exists(),str(path)+': '+value)
     def test_admin_and_marketplace_script_elements_exist(self):
-        for page,script,accessor in [('admin.html','admin.js','el'),('marketplace.html','marketplace.js','m')]:
+        for page,script,accessor in [('admin.html','admin.js','el'),('marketplace.html','marketplace.js','m'),('index.html','shop.js','get')]:
             parsed=Parser();parsed.feed((ROOT/'web'/page).read_text())
-            used=set(re.findall(r"\b"+accessor+r"\('([^']+)'\)",(ROOT/'web'/script).read_text()))
+            used=set(re.findall(r"(?<![\w.])"+accessor+r"\('([^']+)'\)",(ROOT/'web'/script).read_text()))
             self.assertEqual(used-parsed.ids,set())
+    def test_product_search_elements_exist(self):
+        parsed=Parser();parsed.feed((ROOT/'web/index.html').read_text())
+        used=set(re.findall(r"getElementById\('([^']+)'\)",(ROOT/'web/product-search.js').read_text()))
+        self.assertEqual(used-parsed.ids,set())
     def test_manifest_icons_have_correct_dimensions(self):
         manifest=json.loads((ROOT/'web/manifest.webmanifest').read_text())
         self.assertEqual(manifest['name'],'Global POS')
