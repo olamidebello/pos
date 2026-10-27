@@ -127,7 +127,7 @@
             owner: root
             group: root
             mode: '0644'
-          loop: [control.py, commerce.py, gateways.py, agreement_gate.py]
+          loop: [control.py, commerce.py, gateways.py, agreement_gate.py, discovery.py, discover-store.yml]
           register: pos_control_code
         - name: Install server-readable immutable agreement documents
           ansible.builtin.copy:

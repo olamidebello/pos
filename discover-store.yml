@@ -1,0 +1,15 @@
+---
+- name: Discover nearby online stores without provisioning or changing inventory
+  hosts: localhost
+  gather_facts: false
+  become: false
+  tasks:
+    - name: Fetch bounded public store findings for user review
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - "{{ playbook_dir }}/discovery.py"
+          - "{{ discovery_output }}"
+        stdin: "{{ {'lat': discovery_lat, 'lon': discovery_lon} | to_json }}"
+      changed_when: false
+      no_log: true

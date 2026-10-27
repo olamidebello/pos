@@ -16,6 +16,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from zoneinfo import ZoneInfo
+from discovery import discover
 from commerce import Commerce, initialize as initialize_commerce, RESOURCES as COMMERCE_RESOURCES
 
 DEMO_EMAIL = 'demo@globalpos.example'
@@ -385,6 +386,11 @@ class Handler(BaseHTTPRequestHandler):
                 result=control.discover(query.get('lat',[None])[0],query.get('lon',[None])[0])
             elif self.command=='GET' and path=='/api/catalog':
                 result=control.public_catalog(query.get('store_id',[''])[0])
+            elif self.command=='POST' and path=='/api/discovery':
+                if control.demo: raise PermissionError('Online discovery is unavailable in the demo')
+                control.rate_limit('discovery:'+origin,6,3600)
+                control.rate_limit('discovery:global',120,3600)
+                result=discover(self.body(),self.server.db_path)
             elif self.command=='POST' and path=='/api/signup':
                 if control.demo: raise PermissionError('Use the live signup page to create an account')
                 control.rate_limit('signup:'+origin,5,3600)
