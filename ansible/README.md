@@ -115,7 +115,7 @@ Copy these examples outside Git and fill both SSH targets, public IPs and certif
 - `inventory.two-server.example.ini` → `/secure/path/global-pos-inventory.ini`
 - `two-server.vars.example.yml` → `/secure/path/global-pos-settings.yml`
 
-There must be one host under `pos_servers` and a different host under `appstore_servers`. Keep SSH host checking enabled. Use your SSH agent/key, normal Ansible SSH-password handling, or Ansible Vault; do not commit credentials. The POS server requires real DNS for `pos.africandroid.com`; the existing store requires `africanappsstore.space`. Their A/AAAA records must route to their respective servers. If either hostname has valid AAAA records, add that server's public IPv6 addresses in the matching `*_ssl_additional_public_ips` list.
+There must be one host under `pos_servers` and a different host under `appstore_servers`. Keep SSH host checking enabled. Use your SSH agent/key, normal Ansible SSH-password handling, or Ansible Vault; do not commit credentials. The POS server requires real DNS for `pos.africandroid.world`; the existing store requires `africanappsstore.space`. Their A/AAAA records must route to their respective servers. If either hostname has valid AAAA records, add that server's public IPv6 addresses in the matching `*_ssl_additional_public_ips` list.
 
 Run the complete workflow from the updated checkout:
 
@@ -138,16 +138,16 @@ The publisher:
 
 1. Confirms this host runs the existing store and verifies Global POS's HTTPS install, demo, legal, icon, worker and manifest resources before advertising them.
 2. Copies the logo/artwork into the running store's public `static` directory, using same-origin image URLs required by its security policy.
-3. Takes an online SQLite backup and a private frontend backup; inserts/updates only the `pos.africandroid.com` catalog row and adds that card's logo, correct PWA platform label, install link and demo link to the recognized renderer. A targeted backend compatibility patch permits only its two PNG asset paths and the correct PNG MIME type; source is compiled before activation.
+3. Takes an online SQLite backup and a private frontend backup; inserts/updates only the `pos.africandroid.world` catalog row and adds that card's logo, correct PWA platform label, install link and demo link to the recognized renderer. A targeted backend compatibility patch permits only its two PNG asset paths and the correct PNG MIME type; source is compiled before activation.
 4. Preserves all other apps, accounts, releases and administrator visibility settings. New listings are visible by default. An already hidden Global POS listing stays hidden and is reported as hidden, rather than failing an assertion that every listing must be public. Explicitly unhide only Global POS with `-e pos_store_publish=true` if intended.
 5. Verifies the local and public hosted-app API. On failure it rolls back only its own catalog row/frontend patch with comparison guards; it does not restore the whole database and discard concurrent user activity. Public asset copies may remain, with Ansible backups retained.
 6. Skips new catalog/frontend backups when the listing and patch are already current. The store service restarts only when the PNG allowlist/MIME compatibility patch changes; a failed verification restores the prior targeted source and restarts the restored backend. No unrelated store upgrade, port change, TLS rewrite, APK upload or account promotion is performed by the listing publisher.
 
-The store's future independent frontend updates may replace this card patch; rerun the idempotent publisher after those updates. Review/prune private backups under `/var/lib/global-pos-store-sync` according to your operational retention policy. Store location: `https://africanappsstore.space/#Hosted%20apps`; install link: `https://pos.africandroid.com/install.html`; demo: `https://pos.africandroid.com/demo.html`. These are target URLs, not a report that this checkout has already been published.
+The store's future independent frontend updates may replace this card patch; rerun the idempotent publisher after those updates. Review/prune private backups under `/var/lib/global-pos-store-sync` according to your operational retention policy. Store location: `https://africanappsstore.space/#Hosted%20apps`; install link: `https://pos.africandroid.world/install.html`; demo: `https://pos.africandroid.world/demo.html`. These are target URLs, not a report that this checkout has already been published.
 
 ## 4. Automatically obtain, install and renew the required SSL certificates
 
-`ssl.yml` handles **pos.africandroid.com on the POS server** and **africanappsstore.space on the separate store server**. POS's normal first deployment already configures its HTTP-01 challenge route, obtains its certificate and enables HTTPS. The reusable certificate playbook can subsequently repair a missing/expiring domain certificate on an otherwise deployed site, and it sets up the store's existing dedicated Nginx vhost with Certbot's Nginx plugin and HTTPS redirects.
+`ssl.yml` handles **pos.africandroid.world on the POS server** and **africanappsstore.space on the separate store server**. POS's normal first deployment already configures its HTTP-01 challenge route, obtains its certificate and enables HTTPS. The reusable certificate playbook can subsequently repair a missing/expiring domain certificate on an otherwise deployed site, and it sets up the store's existing dedicated Nginx vhost with Certbot's Nginx plugin and HTTPS redirects.
 
 ```sh
 ansible-playbook -i /secure/path/global-pos-inventory.ini \
@@ -219,9 +219,9 @@ ansible-pull --url https://github.com/olamidebello/pos.git \
   --extra-vars @/etc/pos-deploy/settings.yml ansible/deploy-olamidepanel.yml
 ```
 
-That file needs `pos_domain: pos.africandroid.com`, the real `pos_public_ip`, and a real `pos_ssl_email`. Optional `pos_auto_update: true` (default) enables the existing five-minute `pos-auto-update.timer` to pull, test, deploy and verify subsequent `main` updates automatically. The initial successful deployment saves these settings privately. For an existing checkout, the equivalent command is `sudo sh deploy/bootstrap.sh /absolute/path/to/private-settings.yml --olamidepanel`.
+That file needs `pos_domain: pos.africandroid.world`, the real `pos_public_ip`, and a real `pos_ssl_email`. Optional `pos_auto_update: true` (default) enables the existing five-minute `pos-auto-update.timer` to pull, test, deploy and verify subsequent `main` updates automatically. The initial successful deployment saves these settings privately. For an existing checkout, the equivalent command is `sudo sh deploy/bootstrap.sh /absolute/path/to/private-settings.yml --olamidepanel`.
 
-Before the run, point `pos.africandroid.com` A/AAAA records to this server and allow TCP 80/443. Exact hostname conflicts in an existing panel/static/custom vhost are reported rather than deleted. Keep this domain under the dedicated POS deployment rather than queuing it as a static website in the panel. The separate Apps Store workflow remains separate; running this command does not assume the store is on the panel host.
+Before the run, point `pos.africandroid.world` A/AAAA records to this server and allow TCP 80/443. Exact hostname conflicts in an existing panel/static/custom vhost are reported rather than deleted. Keep this domain under the dedicated POS deployment rather than queuing it as a static website in the panel. The separate Apps Store workflow remains separate; running this command does not assume the store is on the panel host.
 
 Useful checks after deployment:
 

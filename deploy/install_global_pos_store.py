@@ -18,7 +18,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-DOMAIN = 'pos.africandroid.com'
+DOMAIN = 'pos.africandroid.world'
 STORE_ORIGIN = 'https://africanappsstore.space'
 
 
@@ -71,22 +71,22 @@ def frontend(text):
     anchor = '<h3>${esc(a.name)}</h3>'
     if anchor not in hosted:
         raise ValueError('Unsupported hosted card template')
-    icon = "${a.domain==='pos.africandroid.com'?'<img src=\"/static/global-pos-icon.png\" alt=\"Global POS\" width=\"120\" height=\"120\">':''}"
+    icon = "${a.domain==='pos.africandroid.world'?'<img src=\"/static/global-pos-icon.png\" alt=\"Global POS\" width=\"120\" height=\"120\">':''}"
     if icon not in hosted:
         hosted = hosted.replace(anchor, icon + anchor, 1)
     # Give this PWA its correct platform text without changing other cards.
-    if "'pos.africandroid.com'].includes(a.domain)?esc(a.platforms)" not in hosted:
+    if "'pos.africandroid.world'].includes(a.domain)?esc(a.platforms)" not in hosted:
         ending = '].includes(a.domain)?esc(a.platforms)'
         if ending not in hosted:
             raise ValueError('Unsupported platform label; update the store frontend first')
-        hosted = hosted.replace(ending, ",'pos.africandroid.com'" + ending, 1)
+        hosted = hosted.replace(ending, ",'pos.africandroid.world'" + ending, 1)
     website = '<a href="${esc(a.website)}" target="_blank" rel="noopener">Open website</a>'
     if website not in hosted:
         raise ValueError('Unsupported store website-link template')
     if 'Install on your device' not in hosted:
         install = "${a.install_url&&a.install_url.startsWith('https://')?`<a class=\"button\" href=\"${esc(a.install_url)}\" target=\"_blank\" rel=\"noopener noreferrer\">Install on your device</a>`:''}"
         hosted = hosted.replace(website, install + website, 1)
-    demo = "${a.domain==='pos.africandroid.com'?'<a class=\"button\" href=\"https://pos.africandroid.com/demo.html\" target=\"_blank\" rel=\"noopener noreferrer\">Try Global POS demo</a>':''}"
+    demo = "${a.domain==='pos.africandroid.world'?'<a class=\"button\" href=\"https://pos.africandroid.world/demo.html\" target=\"_blank\" rel=\"noopener noreferrer\">Try Global POS demo</a>':''}"
     if demo not in hosted:
         hosted = hosted.replace(website, demo + website, 1)
     return before + hosted

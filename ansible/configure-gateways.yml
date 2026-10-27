@@ -43,7 +43,7 @@
         mode: '0600'
         content: |
           # Managed by Global POS configure-gateways.yml; supply the full mapping on each run.
-          GLOBALPOS_PUBLIC_URL=https://pos.africandroid.com
+          GLOBALPOS_PUBLIC_URL=https://pos.africandroid.world
           GLOBALPOS_ENABLE_LIVE_PAYMENTS={{ '1' if pos_enable_live_payments | bool else '0' }}
           {% for item in pos_gateway_secrets | dict2items | sort(attribute='key') %}
           {{ item.key }}={{ item.value | to_json }}

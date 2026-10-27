@@ -1,6 +1,6 @@
 ---
 # Copy outside Git; replace both public IPs and real certificate contact emails.
-pos_domain: pos.africandroid.com
+pos_domain: pos.africandroid.world
 pos_public_ip: REPLACE_POS_PUBLIC_IP
 pos_ssl_email: REPLACE_WITH_REAL_EMAIL
 pos_git_version: main

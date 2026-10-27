@@ -26,14 +26,14 @@
       failed_when: pos_store_active.rc != 0 or pos_store_active.stdout | trim != 'active'
     - name: Verify Global POS install and demo resources are live before advertising them
       ansible.builtin.uri:
-        url: 'https://pos.africandroid.com{{ item }}'
+        url: 'https://pos.africandroid.world{{ item }}'
         validate_certs: true
         status_code: 200
         use_proxy: false
       loop: [/install.html, /demo.html, /privacy.html, /terms.html, /assets/icon-192.png, /sw.js]
     - name: Verify the mobile manifest identifies Global POS
       ansible.builtin.uri:
-        url: https://pos.africandroid.com/manifest.webmanifest
+        url: https://pos.africandroid.world/manifest.webmanifest
         validate_certs: true
         status_code: 200
         return_content: true

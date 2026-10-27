@@ -15,7 +15,7 @@
       ansible.builtin.assert:
         that:
           - hostvars[groups['pos_servers'][0]].ansible_host | default(groups['pos_servers'][0]) != hostvars[groups['appstore_servers'][0]].ansible_host | default(groups['appstore_servers'][0])
-          - pos_domain == 'pos.africandroid.com'
+          - pos_domain == 'pos.africandroid.world'
           - store_domain | default('africanappsstore.space') == 'africanappsstore.space'
         fail_msg: Configure separate SSH hosts and the Global POS / Apps Store domains.
 

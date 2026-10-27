@@ -197,7 +197,7 @@ class Commerce:
         else:
             order=dict(self.db.execute('SELECT * FROM orders WHERE id=?',(identifier,)).fetchone())
             query={'order':identifier}
-            public=os.environ.get('GLOBALPOS_PUBLIC_URL','https://pos.africandroid.com').rstrip('/')
+            public=os.environ.get('GLOBALPOS_PUBLIC_URL','https://pos.africandroid.world').rstrip('/')
             if not re.fullmatch(r'https://[a-z0-9.-]+(?::[0-9]+)?',public):raise ValueError('Configure a secure public return origin')
             try:
                 result=gateways.checkout(config,order,email,public+'/marketplace.html?'+urlencode(query))

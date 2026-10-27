@@ -1,6 +1,6 @@
 # Copy outside Git to /etc/pos-deploy/settings.yml on the target server.
 # Required: real DNS name, server public IP, and a working certificate contact.
-pos_domain: pos.example.com
+pos_domain: pos.africandroid.world
 pos_public_ip: 203.0.113.10
 pos_ssl_email: admin@example.com
 # Debian 12 / Ubuntu 22.04+ with systemd and conventional Nginx sites-enabled.

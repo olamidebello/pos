@@ -80,10 +80,10 @@ class StorePublishTests(unittest.TestCase):
 class SSLPreflightTests(unittest.TestCase):
     def test_stale_aaaa_fails_before_certificate_changes(self):
         def resolve(*args,**kwargs):return [(0,0,0,'',('8.8.8.8',80)),(0,0,0,'',('2606:4700:4700::1111',80))]
-        with self.assertRaises(ValueError):check_dns('pos.africandroid.com','8.8.8.8',[],resolve)
-        self.assertEqual(len(check_dns('pos.africandroid.com','8.8.8.8',['2606:4700:4700::1111'],resolve)),2)
+        with self.assertRaises(ValueError):check_dns('pos.africandroid.world','8.8.8.8',[],resolve)
+        self.assertEqual(len(check_dns('pos.africandroid.world','8.8.8.8',['2606:4700:4700::1111'],resolve)),2)
     def test_dedicated_vhost_required(self):
-        text='# configuration file /etc/nginx/sites-enabled/test:\nserver_name pos.africandroid.com;\nserver_name pos.africandroid.com;'
-        self.assertTrue(vhost(text,'pos.africandroid.com').endswith('/test'))
-        with self.assertRaises(ValueError):vhost(text.replace('server_name pos.africandroid.com;','server_name pos.africandroid.com unrelated.example;'),'pos.africandroid.com')
-        with self.assertRaises(ValueError):vhost('server_name unrelated.example;','pos.africandroid.com')
+        text='# configuration file /etc/nginx/sites-enabled/test:\nserver_name pos.africandroid.world;\nserver_name pos.africandroid.world;'
+        self.assertTrue(vhost(text,'pos.africandroid.world').endswith('/test'))
+        with self.assertRaises(ValueError):vhost(text.replace('server_name pos.africandroid.world;','server_name pos.africandroid.world unrelated.example;'),'pos.africandroid.world')
+        with self.assertRaises(ValueError):vhost('server_name unrelated.example;','pos.africandroid.world')

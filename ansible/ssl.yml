@@ -18,7 +18,7 @@
   gather_facts: true
   any_errors_fatal: true
   vars:
-    ssl_domain: '{{ pos_domain | default("pos.africandroid.com") }}'
+    ssl_domain: '{{ pos_domain | default("pos.africandroid.world") }}'
     ssl_public_ip: '{{ pos_public_ip }}'
     ssl_email: '{{ pos_ssl_email }}'
     ssl_additional_public_ips: '{{ pos_ssl_additional_public_ips | default([]) }}'
