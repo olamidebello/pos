@@ -1,0 +1,11 @@
+[Unit]
+Description=Pull, validate and deploy the POS repository
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+UMask=0022
+Environment=GIT_TERMINAL_PROMPT=0
+ExecStart=/usr/bin/flock --nonblock /run/pos-deploy.lock /usr/bin/ansible-pull --url {{ pos_repo_url }} --checkout {{ pos_git_version }} --directory /var/lib/pos-deploy/automation --inventory localhost, --limit localhost --connection local --extra-vars @/etc/pos-deploy/settings.yml ansible/deploy.yml
+TimeoutStartSec=1800

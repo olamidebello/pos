@@ -1,0 +1,13 @@
+# Copy outside Git to /etc/pos-deploy/settings.yml on the target server.
+# Required: real DNS name, server public IP, and a working certificate contact.
+pos_domain: pos.example.com
+pos_public_ip: 203.0.113.10
+pos_ssl_email: admin@example.com
+# Debian 12 / Ubuntu 22.04+ with systemd and conventional Nginx sites-enabled.
+pos_repo_url: https://github.com/olamidebello/pos.git
+pos_git_version: main
+pos_auto_update: true
+pos_update_interval: 5min
+# Optional: add HTTP/HTTPS rules only if UFW is already active.
+# Other firewall rules and SSH access are preserved. Cloud firewalls need separate rules.
+pos_manage_ufw: false

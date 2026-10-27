@@ -11,7 +11,7 @@ This repository currently contains agreement drafts and a tested Python/SQLite a
 - `agreements/autopay-v1.md`: separate optional automatic payment authorization.
 - `agreement_gate.py`: version/hash acceptance records, store scoping and automatic-payment withdrawal.
 
-Run `python3 -m unittest discover -s tests -v`.
+Install Ansible Core (which includes Jinja2 for deployment-template tests), then run `python3 -m unittest discover -s tests -v`.
 
 ## Required integration behavior
 
@@ -24,3 +24,7 @@ Keep events append-only to application roles, restrict administrator access, and
 Payment consent must also be checked at payment submission, with server-calculated totals, payment-method binding, spending limits and provider authentication. The module's consent flag alone must never authorize a charge. Repeated checkout requests need idempotency. Mark receipts paid only from verified provider results and consume exit tokens atomically once.
 
 Draft terms require operator identity, support contact, privacy notice, store return policy and jurisdiction-specific review before live use. No live service or enforceability claim is made by these drafts.
+
+## GitHub and server deployment
+
+Ansible push, automated server pull, HTTPS, port checks and rollback are documented in [ansible/README.md](ansible/README.md). Deployment currently publishes the honest agreement-foundation status page, not a working shopping/payment application.

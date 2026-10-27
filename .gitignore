@@ -2,3 +2,10 @@ __pycache__/
 *.pyc
 *.db
 .env
+# Keep actual server credentials and settings outside version control.
+ansible/inventory.ini
+ansible/vars.yml
+ansible/vault.yml
+*.retry
+*.key
+*.pem

@@ -1,0 +1,11 @@
+[Unit]
+Description=Check the POS repository for validated updates
+
+[Timer]
+OnBootSec=3min
+OnUnitInactiveSec={{ pos_update_interval }}
+RandomizedDelaySec=30s
+Unit=pos-auto-update.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,56 @@
+---
+- name: Validate and push an explicitly selected local change set to GitHub
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    pos_push_branch: main
+    pos_push_remote: origin
+    pos_push_remote_url: https://github.com/olamidebello/pos.git
+    pos_push_message: Update POS deployment automation
+    pos_push_paths: []
+  tasks:
+    - name: Require a checkout and explicit reviewed paths
+      ansible.builtin.assert:
+        that:
+          - pos_push_checkout is defined
+          - pos_push_paths | length > 0
+          - pos_push_paths | type_debug == 'list'
+          - pos_push_branch is match('^[A-Za-z0-9][A-Za-z0-9._/-]*$')
+          - pos_push_remote is match('^[A-Za-z0-9][A-Za-z0-9._-]*$')
+        fail_msg: Supply pos_push_checkout and pos_push_paths; authenticate Git with SSH or a credential helper first.
+    - name: Verify the checkout, branch, remote, paths and staging boundary
+      ansible.builtin.command:
+        argv: "{{ ['python3', playbook_dir + '/../deploy/push_preflight.py', pos_push_checkout, pos_push_branch, pos_push_remote, pos_push_remote_url] + pos_push_paths }}"
+      changed_when: false
+    - name: Test the agreement code before committing
+      ansible.builtin.command:
+        argv: [python3, -m, unittest, discover, -s, tests, -v]
+        chdir: "{{ pos_push_checkout }}"
+      changed_when: false
+    - name: Stage only selected paths
+      ansible.builtin.command:
+        argv: "{{ ['git', 'add', '--'] + pos_push_paths }}"
+        chdir: "{{ pos_push_checkout }}"
+      changed_when: false
+    - name: Detect staged changes
+      ansible.builtin.command:
+        argv: [git, diff, --cached, --quiet]
+        chdir: "{{ pos_push_checkout }}"
+      register: pos_staged
+      changed_when: false
+      failed_when: pos_staged.rc not in [0, 1]
+    - name: Commit the selected changes
+      ansible.builtin.command:
+        argv: [git, commit, -m, "{{ pos_push_message }}"]
+        chdir: "{{ pos_push_checkout }}"
+      when: pos_staged.rc == 1
+      changed_when: true
+    - name: Push without force; a diverged remote must be resolved first
+      ansible.builtin.command:
+        argv: [git, push, "{{ pos_push_remote }}", "HEAD:refs/heads/{{ pos_push_branch }}"]
+        chdir: "{{ pos_push_checkout }}"
+      environment:
+        GIT_TERMINAL_PROMPT: '0'
+      register: pos_push_result
+      changed_when: "'Everything up-to-date' not in pos_push_result.stderr"

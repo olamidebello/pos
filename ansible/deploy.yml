@@ -1,0 +1,405 @@
+---
+- name: Pull and deploy the POS foundation with verified HTTPS
+  hosts: all
+  become: true
+  gather_facts: true
+  vars:
+    pos_repo_url: https://github.com/olamidebello/pos.git
+    pos_git_version: main
+    pos_auto_update: true
+    pos_update_interval: 5min
+    pos_manage_ufw: false
+    pos_vhost: /etc/nginx/sites-available/pos-managed.conf
+  pre_tasks:
+    - name: Validate supported operating system and required settings
+      ansible.builtin.assert:
+        that:
+          - ansible_service_mgr == 'systemd'
+          - (ansible_distribution == 'Debian' and ansible_distribution_major_version | int >= 12) or (ansible_distribution == 'Ubuntu' and ansible_distribution_major_version | int >= 22)
+          - pos_domain is defined
+          - pos_public_ip is defined
+          - pos_ssl_email is defined
+          - pos_domain is match('^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
+          - not pos_domain.endswith('.example.com')
+          - pos_domain not in ['example.com', 'example.org', 'example.net']
+          - pos_ssl_email is match('^[A-Za-z0-9._+%-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}$')
+          - pos_repo_url == 'https://github.com/olamidebello/pos.git'
+          - pos_git_version is match('^[A-Za-z0-9][A-Za-z0-9._/-]*$')
+          - pos_update_interval is match('^[1-9][0-9]*(min|h|d)$')
+        fail_msg: Supply a real domain, public IP and SSL email; supported systems are Debian 12+ or Ubuntu 22.04+ with systemd. The public POS repository is required.
+    - name: Acquire deployment guard without interrupting another deploy
+      ansible.builtin.command:
+        argv: [mkdir, /run/pos-deploy-active]
+      changed_when: true
+  tasks:
+    - name: Deploy while ensuring the guard is released on handled failures
+      block:
+        - name: Install deployment prerequisites
+          ansible.builtin.apt:
+            name: [git, python3, iproute2, ca-certificates, openssl, curl, util-linux]
+            state: present
+            update_cache: true
+            cache_valid_time: 3600
+        - name: Create private deployment state directories
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: directory
+            owner: root
+            group: root
+            mode: '0700'
+          loop: [/etc/pos-deploy, /var/lib/pos-deploy]
+        - name: Copy the read-only DNS and port checker
+          ansible.builtin.copy:
+            src: ../deploy/preflight.py
+            dest: /var/lib/pos-deploy/preflight.py
+            owner: root
+            group: root
+            mode: '0700'
+        - name: Check DNS, port owners, duplicate hostnames and existing Nginx syntax
+          ansible.builtin.command:
+            argv: [python3, /var/lib/pos-deploy/preflight.py, "{{ pos_domain }}", "{{ pos_public_ip }}", "{{ pos_vhost }}"]
+          changed_when: false
+        - name: Install Nginx, certificate client and the automatic pull runner
+          ansible.builtin.apt:
+            name: [nginx, certbot, ansible-core]
+            state: present
+            policy_rc_d: 101
+        - name: Confirm conventional Nginx site directory is loaded
+          ansible.builtin.command:
+            argv: [nginx, -T]
+          register: pos_nginx_dump
+          changed_when: false
+          failed_when: pos_nginx_dump.rc != 0 or 'include /etc/nginx/sites-enabled/*;' not in pos_nginx_dump.stdout
+        - name: Create public web and ACME directories
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: directory
+            owner: root
+            group: root
+            mode: '0755'
+          loop: [/var/www/pos, /var/www/pos/releases, /var/lib/pos-deploy/acme, /var/lib/pos-deploy/acme/.well-known, /var/lib/pos-deploy/acme/.well-known/acme-challenge]
+        - name: Allow access through the private state parent only for ACME traversal
+          ansible.builtin.file:
+            path: /var/lib/pos-deploy
+            state: directory
+            mode: '0711'
+        - name: Pull the selected repository version without discarding local edits
+          ansible.builtin.git:
+            repo: "{{ pos_repo_url }}"
+            dest: /var/lib/pos-deploy/source
+            version: "{{ pos_git_version }}"
+            update: true
+            force: false
+            recursive: false
+          environment:
+            GIT_TERMINAL_PROMPT: '0'
+          register: pos_source
+        - name: Test the pulled code before exposing a release
+          ansible.builtin.command:
+            argv: [python3, -m, unittest, discover, -s, tests, -v]
+            chdir: /var/lib/pos-deploy/source
+          changed_when: false
+        - name: Identify immutable release directory
+          ansible.builtin.set_fact:
+            pos_release: "/var/www/pos/releases/{{ pos_source.after }}"
+        - name: Create release and agreements directories
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: directory
+            owner: root
+            group: root
+            mode: '0755'
+          loop: ["{{ pos_release }}", "{{ pos_release }}/agreements"]
+        - name: Copy only public web assets into the release
+          ansible.builtin.copy:
+            src: /var/lib/pos-deploy/source/web/
+            dest: "{{ pos_release }}/"
+            remote_src: true
+            owner: root
+            group: root
+            mode: '0644'
+            directory_mode: '0755'
+        - name: Copy agreement documents, excluding source and private state
+          ansible.builtin.copy:
+            src: "/var/lib/pos-deploy/source/agreements/{{ item }}"
+            dest: "{{ pos_release }}/agreements/{{ item }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: '0644'
+          loop: [store-v1.md, shopper-v1.md, autopay-v1.md]
+        - name: Write truthful release health metadata
+          ansible.builtin.copy:
+            dest: "{{ pos_release }}/healthz.json"
+            content: "{{ {'status': 'ok', 'component': 'agreement-foundation', 'shopping_available': false, 'commit': pos_source.after} | to_nice_json }}\n"
+            mode: '0644'
+        - name: Inspect previous deployment pointer
+          ansible.builtin.stat:
+            path: /var/www/pos/current
+            follow: false
+          register: pos_previous
+        - name: Refuse to replace an unmanaged current directory
+          ansible.builtin.assert:
+            that: not pos_previous.stat.exists or pos_previous.stat.islnk | default(false)
+            fail_msg: /var/www/pos/current is not a managed symlink; relocate it explicitly first.
+        - name: Inspect previous managed vhost
+          ansible.builtin.stat:
+            path: "{{ pos_vhost }}"
+          register: pos_previous_config
+        - name: Save previous managed vhost for recovery
+          ansible.builtin.slurp:
+            src: "{{ pos_vhost }}"
+          when: pos_previous_config.stat.exists
+          register: pos_previous_config_content
+        - name: Confirm an existing POS vhost is owned by this deployment
+          ansible.builtin.assert:
+            that: (pos_previous_config_content.content | b64decode).startswith('# Managed by the POS Ansible deployment.')
+            fail_msg: The fixed POS config path contains an unmanaged vhost; resolve it explicitly.
+          when: pos_previous_config.stat.exists
+        - name: Inspect enabled vhost link
+          ansible.builtin.stat:
+            path: /etc/nginx/sites-enabled/pos-managed.conf
+            follow: false
+          register: pos_previous_enabled
+        - name: Refuse an unmanaged enabled vhost
+          ansible.builtin.assert:
+            that:
+              - not pos_previous_enabled.stat.exists or (pos_previous_enabled.stat.islnk | default(false) and pos_previous_enabled.stat.lnk_source == pos_vhost)
+        - name: Remember whether Nginx was running before activation
+          ansible.builtin.command:
+            argv: [systemctl, is-active, nginx]
+          register: pos_nginx_was_active
+          changed_when: false
+          failed_when: false
+        - name: Activate release, certificate and routing transactionally
+          block:
+            - name: Atomically switch the document root
+              ansible.builtin.shell: |
+                set -eu
+                ln -s {{ pos_release | quote }} /var/www/pos/.next
+                mv -Tf /var/www/pos/.next /var/www/pos/current
+              args:
+                executable: /bin/sh
+              changed_when: true
+            - name: Inspect existing certificate
+              ansible.builtin.stat:
+                path: "/etc/letsencrypt/live/{{ pos_domain }}/fullchain.pem"
+              register: pos_cert
+            - name: Select HTTPS only when certificate files already exist
+              ansible.builtin.set_fact:
+                pos_tls_ready: "{{ pos_cert.stat.exists }}"
+            - name: Write initial domain routing and ACME location
+              ansible.builtin.template:
+                src: nginx.conf.j2
+                dest: "{{ pos_vhost }}"
+                owner: root
+                group: root
+                mode: '0644'
+            - name: Enable only the managed POS hostname
+              ansible.builtin.file:
+                src: "{{ pos_vhost }}"
+                dest: /etc/nginx/sites-enabled/pos-managed.conf
+                state: link
+            - name: Validate Nginx before starting or reloading
+              ansible.builtin.command:
+                argv: [nginx, -t]
+              changed_when: false
+            - name: Start Nginx without replacing other sites
+              ansible.builtin.systemd:
+                name: nginx
+                state: started
+                enabled: true
+            - name: Reload validated domain routing
+              ansible.builtin.systemd:
+                name: nginx
+                state: reloaded
+            - name: Check UFW availability when firewall management was requested
+              ansible.builtin.command:
+                argv: [ufw, status]
+              register: pos_ufw_status
+              changed_when: false
+              when: pos_manage_ufw | bool
+            - name: Add web rules to an already active UFW firewall
+              ansible.builtin.command:
+                argv: [ufw, allow, "{{ item }}/tcp"]
+              loop: ['80', '443']
+              register: pos_ufw_rule
+              changed_when: "'Rules updated' in pos_ufw_rule.stdout or 'Rule added' in pos_ufw_rule.stdout"
+              when: "pos_manage_ufw | bool and 'Status: active' in pos_ufw_status.stdout"
+            - name: Write a unique public HTTP-01 routing probe
+              ansible.builtin.copy:
+                dest: /var/lib/pos-deploy/acme/.well-known/acme-challenge/pos-route-check
+                content: "{{ pos_source.after }}"
+                mode: '0644'
+            - name: Verify public DNS reaches this exact ACME webroot
+              ansible.builtin.uri:
+                url: "http://{{ pos_domain }}/.well-known/acme-challenge/pos-route-check"
+                return_content: true
+                follow_redirects: none
+                use_proxy: false
+              register: pos_acme_probe
+              failed_when: pos_acme_probe.status != 200 or pos_acme_probe.content != pos_source.after
+            - name: Obtain or renew the real SSL certificate without editing other vhosts
+              ansible.builtin.command:
+                argv:
+                  - certbot
+                  - certonly
+                  - --non-interactive
+                  - --agree-tos
+                  - --email
+                  - "{{ pos_ssl_email }}"
+                  - --webroot
+                  - --webroot-path
+                  - /var/lib/pos-deploy/acme
+                  - --cert-name
+                  - "{{ pos_domain }}"
+                  - --domain
+                  - "{{ pos_domain }}"
+                  - --keep-until-expiring
+              register: pos_certbot
+              changed_when: "'not yet due for renewal' not in (pos_certbot.stdout + pos_certbot.stderr)"
+            - name: Enable HTTPS routing after certificate issuance
+              ansible.builtin.set_fact:
+                pos_tls_ready: true
+            - name: Write HTTPS vhost with HTTP redirect
+              ansible.builtin.template:
+                src: nginx.conf.j2
+                dest: "{{ pos_vhost }}"
+                mode: '0644'
+            - name: Recheck complete Nginx syntax
+              ansible.builtin.command:
+                argv: [nginx, -t]
+              changed_when: false
+            - name: Reload HTTPS configuration
+              ansible.builtin.systemd:
+                name: nginx
+                state: reloaded
+            - name: Verify local origin TLS, hostname and exact release using SNI
+              ansible.builtin.command:
+                argv: [curl, --fail, --silent, --show-error, --noproxy, '*', --resolve, "{{ pos_domain }}:443:127.0.0.1", "https://{{ pos_domain }}/healthz.json"]
+              register: pos_local_health
+              changed_when: false
+              failed_when: pos_local_health.rc != 0 or (pos_local_health.stdout | from_json).commit != pos_source.after
+            - name: Verify public HTTPS health and the deployed revision
+              ansible.builtin.uri:
+                url: "https://{{ pos_domain }}/healthz.json"
+                return_content: true
+                validate_certs: true
+                use_proxy: false
+              register: pos_public_health
+              failed_when: pos_public_health.status != 200 or pos_public_health.json.commit != pos_source.after
+            - name: Verify HTTP redirects to the intended HTTPS hostname
+              ansible.builtin.uri:
+                url: "http://{{ pos_domain }}/"
+                follow_redirects: none
+                status_code: 301
+                use_proxy: false
+              register: pos_redirect
+              failed_when: pos_redirect.location | default('') != 'https://' + pos_domain + '/'
+          rescue:
+            - name: Clear a temporary document-root link if activation was interrupted
+              ansible.builtin.file:
+                path: /var/www/pos/.next
+                state: absent
+            - name: Restore the previous release pointer atomically
+              ansible.builtin.shell: |
+                set -eu
+                ln -s {{ pos_previous.stat.lnk_source | quote }} /var/www/pos/.next
+                mv -Tf /var/www/pos/.next /var/www/pos/current
+              args:
+                executable: /bin/sh
+              when: pos_previous.stat.islnk | default(false)
+              changed_when: true
+            - name: Remove the new pointer when there was no previous release
+              ansible.builtin.file:
+                path: /var/www/pos/current
+                state: absent
+              when: not pos_previous.stat.exists
+            - name: Restore previous managed vhost
+              ansible.builtin.copy:
+                content: "{{ pos_previous_config_content.content | b64decode }}"
+                dest: "{{ pos_vhost }}"
+                mode: '0644'
+              when: pos_previous_config.stat.exists
+            - name: Remove first-install managed configuration
+              ansible.builtin.file:
+                path: "{{ pos_vhost }}"
+                state: absent
+              when: not pos_previous_config.stat.exists
+            - name: Remove first-install enabled link
+              ansible.builtin.file:
+                path: /etc/nginx/sites-enabled/pos-managed.conf
+                state: absent
+              when: not pos_previous_enabled.stat.exists
+            - name: Check restored Nginx syntax
+              ansible.builtin.command:
+                argv: [nginx, -t]
+              changed_when: false
+            - name: Reload the restored configuration
+              ansible.builtin.systemd:
+                name: nginx
+                state: reloaded
+              when: pos_nginx_was_active.rc == 0
+            - name: Stop first-install Nginx when it was previously inactive
+              ansible.builtin.systemd:
+                name: nginx
+                state: stopped
+              when: pos_nginx_was_active.rc != 0
+            - name: Report activation failure after restoring routing
+              ansible.builtin.fail:
+                msg: "Deployment failed and previous routing was restored. Inspect the failed task above, DNS A/AAAA records and external firewall/NAT rules for TCP 80/443. No conflicting services were killed."
+        - name: Ensure the certificate deploy-hook directory exists
+          ansible.builtin.file:
+            path: /etc/letsencrypt/renewal-hooks/deploy
+            state: directory
+            owner: root
+            group: root
+            mode: '0755'
+        - name: Install a certificate renewal reload hook
+          ansible.builtin.copy:
+            dest: /etc/letsencrypt/renewal-hooks/deploy/pos-nginx-reload
+            mode: '0755'
+            content: |
+              #!/bin/sh
+              set -eu
+              /usr/sbin/nginx -t
+              /usr/bin/systemctl reload nginx
+        - name: Enable the packaged certificate renewal timer
+          ansible.builtin.systemd:
+            name: certbot.timer
+            enabled: true
+            state: started
+        - name: Persist only deployment settings for the local automatic pull
+          ansible.builtin.copy:
+            dest: /etc/pos-deploy/settings.yml
+            owner: root
+            group: root
+            mode: '0600'
+            content: "{{ {'pos_domain': pos_domain, 'pos_public_ip': pos_public_ip, 'pos_ssl_email': pos_ssl_email, 'pos_repo_url': pos_repo_url, 'pos_git_version': pos_git_version, 'pos_auto_update': pos_auto_update | bool, 'pos_update_interval': pos_update_interval, 'pos_manage_ufw': pos_manage_ufw | bool} | to_nice_yaml }}"
+        - name: Install the automatic update service and timer
+          ansible.builtin.template:
+            src: "{{ item.src }}"
+            dest: "{{ item.dest }}"
+            mode: '0644'
+          loop:
+            - {src: auto-update.service.j2, dest: /etc/systemd/system/pos-auto-update.service}
+            - {src: auto-update.timer.j2, dest: /etc/systemd/system/pos-auto-update.timer}
+        - name: Apply timer settings and enable or disable automatic updates
+          ansible.builtin.systemd:
+            name: pos-auto-update.timer
+            daemon_reload: true
+            enabled: "{{ pos_auto_update | bool }}"
+            state: "{{ 'started' if pos_auto_update | bool else 'stopped' }}"
+        - name: Write the successful deployment report
+          ansible.builtin.copy:
+            dest: /var/lib/pos-deploy/report.json
+            mode: '0600'
+            content: "{{ {'status': 'deployed', 'url': 'https://' + pos_domain, 'commit': pos_source.after, 'component': 'agreement-foundation', 'shopping_available': false, 'ssl': 'verified', 'auto_update': pos_auto_update | bool} | to_nice_json }}\n"
+        - name: Report the verified result
+          ansible.builtin.debug:
+            msg: "Deployed agreement foundation at https://{{ pos_domain }} with verified SSL. Shopping/payment functionality is not implemented."
+      always:
+        - name: Release deployment guard
+          ansible.builtin.file:
+            path: /run/pos-deploy-active
+            state: absent

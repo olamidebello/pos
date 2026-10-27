@@ -1,0 +1,41 @@
+# Managed by the POS Ansible deployment. Other vhosts remain unchanged.
+server {
+    listen 80;
+{% if ansible_all_ipv6_addresses | default([]) | length > 0 %}
+    listen [::]:80;
+{% endif %}
+    server_name {{ pos_domain }};
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/lib/pos-deploy/acme;
+        default_type text/plain;
+        try_files $uri =404;
+    }
+    location / {
+{% if pos_tls_ready %}
+        return 301 https://{{ pos_domain }}$request_uri;
+{% else %}
+        return 503 "SSL setup in progress.\n";
+{% endif %}
+    }
+}
+{% if pos_tls_ready %}
+server {
+    listen 443 ssl;
+{% if ansible_all_ipv6_addresses | default([]) | length > 0 %}
+    listen [::]:443 ssl;
+{% endif %}
+    server_name {{ pos_domain }};
+    ssl_certificate /etc/letsencrypt/live/{{ pos_domain }}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{ pos_domain }}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    root /var/www/pos/current;
+    index index.html;
+    autoindex off;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+    add_header Content-Security-Policy "default-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+    location / { try_files $uri $uri/ =404; }
+    location = /healthz.json { add_header Cache-Control "no-store" always; }
+    location ~ /\. { deny all; }
+}
+{% endif %}
