@@ -37,7 +37,7 @@
       block:
         - name: Install deployment prerequisites
           ansible.builtin.apt:
-            name: [git, python3, tzdata, iproute2, ca-certificates, openssl, curl, util-linux]
+            name: [git, python3, python3-cryptography, python3-qrcode, python3-pil, tzdata, iproute2, ca-certificates, openssl, curl, util-linux]
             state: present
             update_cache: true
             cache_valid_time: 3600
@@ -127,7 +127,7 @@
             owner: root
             group: root
             mode: '0644'
-          loop: [control.py, commerce.py, gateways.py, agreement_gate.py, discovery.py, product_search.py, discover-store.yml]
+          loop: [control.py, commerce.py, federation.py, storefronts.py, pos_engine.py, restaurant.py, pos_exports.py, demo_operations.py, gateways.py, agreement_gate.py, discovery.py, product_search.py, discover-store.yml]
           register: pos_control_code
         - name: Install server-readable immutable agreement documents
           ansible.builtin.copy:

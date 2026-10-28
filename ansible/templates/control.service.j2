@@ -6,6 +6,7 @@ User=pos-control
 Group=pos-control
 WorkingDirectory=/opt/pos-control
 EnvironmentFile=-/etc/pos-control/gateways.env
+Environment=GLOBALPOS_PUBLIC_ORIGIN=https://{{ pos_domain }}
 ExecStart=/usr/bin/python3 /opt/pos-control/control.py --db /var/lib/pos-control/control.db
 Restart=on-failure
 StateDirectory=pos-control

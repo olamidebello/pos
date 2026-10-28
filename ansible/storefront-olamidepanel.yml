@@ -1,0 +1,15 @@
+---
+- name: Select the primary Global POS storefront hostname
+  hosts: "{{ pos_deploy_hosts | default('all') }}"
+  gather_facts: false
+  tasks:
+    - name: Select primary domain
+      ansible.builtin.set_fact:
+        pos_domain: pos.africandroid.com
+    - name: Require actual server and certificate settings
+      ansible.builtin.assert:
+        that:
+          - pos_public_ip | default('') | length > 0
+          - pos_ssl_email | default('') | length > 0
+        fail_msg: Supply pos_public_ip and pos_ssl_email. DNS for pos.africandroid.com must point to this server. The existing deployment validates routing before certificate issuance.
+- import_playbook: deploy.yml
