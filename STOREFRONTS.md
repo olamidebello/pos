@@ -11,7 +11,7 @@ git pull --ff-only
 ansible-playbook -i localhost, -c local ansible/storefront-olamidepanel.yml -e pos_public_ip=154.16.170.86 -e pos_ssl_email=dobcalldemo@gmail.com
 ```
 
-This selects the main `.com` domain. It does not silently issue an alternate `.world` certificate or modify unrelated virtual hosts. Check DNS first. Existing deployment backups, conflict detection, ACME verification and rollback checks still apply. The `.world` wrapper remains available for a separate installation; both domains are not claimed deployed by this change.
+The storefront hostname is `pos.africandroid.world`. Check DNS first. Existing deployment backups, conflict detection, ACME verification and rollback checks still apply. Unrelated virtual hosts are preserved. The former hostname is no longer accepted by the Business Suite connection.
 
 Then update DOBHRAP and run its `ansible/store-pos-oob.yml` on inventory host `dobhrap`. That deploys the Suite connection, creates a persistent Ed25519 signer and publishes only its verification key locally to POS. Opted-in registrations enter a bounded retry queue (three workspaces per minute). A company draft is created once even if the acknowledgement is lost. Source user/workspace IDs define identity, never email matching. Business Suite admin maps to tenant administrator, editor to cashier, viewer to auditor; no connected identity becomes POS super admin. A signed browser challenge and a single-use, 60-second assertion exchange create a 15-minute POS session. Reopen from Suite after expiry. Suspending the POS user/workspace blocks access immediately; Suite account changes take effect on reconnect or grant expiry. Source role changes do not create platform privileges.
 
