@@ -18,7 +18,7 @@ def initialize(db):
 
 def configuration():
  issuer=os.environ.get('GLOBALPOS_SUITE_ISSUER','https://olamideolatayobello.com').rstrip('/')
- audience=os.environ.get('GLOBALPOS_PUBLIC_ORIGIN','https://pos.africandroid.com').rstrip('/')
+ audience=os.environ.get('GLOBALPOS_PUBLIC_ORIGIN','https://pos.africandroid.world').rstrip('/')
  path=Path(os.environ.get('GLOBALPOS_SUITE_PUBLIC_KEY_FILE','/etc/pos-control/suite-pos-public.key'))
  return issuer,audience,path
 
