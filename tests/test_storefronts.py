@@ -36,10 +36,10 @@ class StorefrontTests(unittest.TestCase):
   self.c.signup(dict(self.data,email='without@example.test',create_storefront=False));self.assertEqual(self.c.db.execute('SELECT count(*) FROM storefronts').fetchone()[0],1)
 class FederationTests(unittest.TestCase):
  def setUp(self):
-  self.tmp=tempfile.TemporaryDirectory();self.c=Control(str(Path(self.tmp.name)/'db'));self.key=Ed25519PrivateKey.generate();p=Path(self.tmp.name)/'pub';p.write_bytes(self.key.public_key().public_bytes(Encoding.PEM,PublicFormat.SubjectPublicKeyInfo));self.env=patch.dict(os.environ,GLOBALPOS_SUITE_PUBLIC_KEY_FILE=str(p),GLOBALPOS_PUBLIC_ORIGIN='https://pos.africandroid.com');self.env.start();self.nonce=secrets.token_hex(32)
+  self.tmp=tempfile.TemporaryDirectory();self.c=Control(str(Path(self.tmp.name)/'db'));self.key=Ed25519PrivateKey.generate();p=Path(self.tmp.name)/'pub';p.write_bytes(self.key.public_key().public_bytes(Encoding.PEM,PublicFormat.SubjectPublicKeyInfo));self.env=patch.dict(os.environ,GLOBALPOS_SUITE_PUBLIC_KEY_FILE=str(p),GLOBALPOS_PUBLIC_ORIGIN='https://pos.africandroid.world');self.env.start();self.nonce=secrets.token_hex(32)
  def tearDown(self):self.env.stop();self.c.db.close();self.tmp.cleanup()
  def body(self,**changes):
-  now=int(time.time());claims=dict(iss='https://olamideolatayobello.com',aud='https://pos.africandroid.com',scope='store-pos',sub='4',tenant='2',role='admin',company='Business',email='same@example.test',iat=now,exp=now+60,jti=secrets.token_hex(32),nonce=self.nonce,target='merchant',storefront=dict(country='US',currency='USD',timezone='UTC'));claims.update(changes)
+  now=int(time.time());claims=dict(iss='https://olamideolatayobello.com',aud='https://pos.africandroid.world',scope='store-pos',sub='4',tenant='2',role='admin',company='Business',email='same@example.test',iat=now,exp=now+60,jti=secrets.token_hex(32),nonce=self.nonce,target='merchant',storefront=dict(country='US',currency='USD',timezone='UTC'));claims.update(changes)
   raw=federation.b64(json.dumps(dict(alg='EdDSA',typ='JWT')).encode())+'.'+federation.b64(json.dumps(claims).encode());return dict(assertion=raw+'.'+federation.b64(self.key.sign(raw.encode())),nonce=self.nonce)
  def test_replay_scopes_and_idempotent_provision(self):
   body=self.body(scope='storefront-provision');result=federation.exchange(self.c,body,True)
