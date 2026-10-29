@@ -38,7 +38,7 @@ def qr_url(control,path,values):
  import os,re
  from pathlib import Path
  from urllib.parse import urlsplit,urlencode
- origin=os.environ.get('GLOBALPOS_PUBLIC_ORIGIN','https://pos.africandroid.com').rstrip('/');p=urlsplit(origin)
+ origin=os.environ.get('GLOBALPOS_PUBLIC_ORIGIN','https://pos.africandroid.world').rstrip('/');p=urlsplit(origin)
  if p.scheme!='https' or not p.hostname or p.path or p.query or p.fragment or p.username or p.password:raise ValueError('Configure the public HTTPS origin for QR links')
  if control.demo:
   identifier=Path(control.db.execute('PRAGMA database_list').fetchone()[2]).stem
